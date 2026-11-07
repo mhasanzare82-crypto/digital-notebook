@@ -1,0 +1,46 @@
+{
+  "name": "digital-notebook-fa",
+  "version": "1.0.0",
+  "description": "Persian digital handwriting notebook for Windows",
+  "main": "main.js",
+  "author": "Digital Notebook",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ir.digitalnotebook.app",
+    "productName": "دفتر دیجیتال من",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "دفتر دیجیتال من"
+    },
+    "portable": {
+      "artifactName": "DigitalNotebook-Portable-${version}.${ext}"
+    }
+  }
+}

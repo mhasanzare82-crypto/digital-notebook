@@ -1,0 +1,700 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#edf1f7">
+<title>دفتر دیجیتال من</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e8edf4;color:#263244;font-family:Tahoma,Arial}
+button,input,select{font:inherit}
+button{cursor:pointer;border:1px solid #dce2eb;border-radius:8px;background:#f3f5f9;color:#263244;padding:8px 11px}
+button:hover{filter:brightness(.96)}
+#app{height:100vh;display:flex;flex-direction:column;padding:9px;gap:8px;overflow:hidden}
+header,.top,.sidebar,.toolbar,.settings{background:white;border:1px solid #dce2eb;border-radius:11px}
+header{min-height:54px;display:flex;align-items:center;gap:9px;padding:8px 12px}
+header h3{font-size:15px;margin:0}
+.primary{background:#3769d6;color:white;border-color:#3769d6}
+.layout{flex:1;min-height:0;display:flex;gap:8px}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.sidebar{width:240px;flex-shrink:0;padding:13px;overflow:auto;transition:.2s}
+.sidebar.closed{width:0;padding:0;border:0;overflow:hidden}
+.sidebar h3{font-size:14px;margin:5px 0 14px}
+.sidebar input{width:100%;padding:10px;border:1px solid #dce2eb;border-radius:8px}
+.add{width:100%;background:#3769d6;color:white}
+.topic{display:flex;align-items:center;gap:4px;margin:7px 0;background:#f3f5f9;padding:5px;border-radius:8px}
+.topic.active{background:#e6edff;border:1px solid #a9c3f4}
+.topic-name{flex:1;text-align:right;overflow:hidden}
+.pin{background:transparent;border:0;padding:5px}
+.pinned{color:#d59a16}
+.top{padding:8px 12px;flex-shrink:0}
+.caption{font-size:11px;color:#788394;margin:2px 0 6px}
+.tabs{display:flex;gap:6px;overflow-x:auto;min-height:34px;padding-bottom:5px}
+.tab{white-space:nowrap;font-size:12px}
+.tab.active{background:#e4edff;border-color:#91b2f4;color:#2456bd}
+.tab img,.topic-name img{width:76px;height:25px;object-fit:contain}
+.paper-area{flex:1;min-height:0;overflow:auto;background:#e5eaf1;border:1px solid #d4dce8;border-radius:11px;padding:15px;display:flex;justify-content:center;align-items:flex-start}
+.paper{flex-shrink:0;background:white;box-shadow:0 3px 15px #0002;position:relative}
+canvas{display:block;touch-action:none;cursor:crosshair}
+.toolbar,.settings{padding:9px 11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0}
+.toolbar select,.settings select,.settings input[type=number]{border:1px solid #dce2eb;border-radius:7px;padding:8px;background:white}
+input[type=color]{width:35px;height:32px;padding:0;border:0;background:transparent;cursor:pointer}
+input[type=range]{width:80px}
+.sep{height:27px;border-right:1px solid #dce2eb}
+.small{font-size:11px;color:#788394}
+.sizebox{display:flex;align-items:center;gap:5px;font-size:11px}
+.sizebox input{width:55px}
+.status{font-size:10px;color:#64748b;margin-right:auto}
+.settings{gap:10px}
+.setting{display:flex;align-items:center;gap:5px;font-size:11px;flex-wrap:wrap}
+.settings input[type=file]{max-width:140px;font-size:10px}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:20;align-items:center;justify-content:center;padding:15px}
+.modal-box{width:min(550px,100%);background:white;border-radius:14px;padding:18px;max-height:95vh;overflow:auto}
+.modal-box h3{margin-top:0}
+.modal-box canvas{width:100%;height:150px;border:2px solid #dce2eb;border-radius:8px}
+.modal-box input,.modal-box select{padding:10px;border:1px solid #dce2eb;border-radius:8px;margin:7px 0}
+.modal-actions{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:760px){
+ #app{padding:4px;gap:5px}
+ .sidebar{position:absolute;z-index:10;right:4px;top:60px;bottom:4px;width:220px;box-shadow:0 3px 20px #0002}
+ .sidebar.closed{width:0}
+ .toolbar,.settings{gap:5px;padding:7px}
+ header h3{font-size:12px}
+ .paper-area{padding:8px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+<button id="toggle">☰</button>
+<h3>📓 دفتر دیجیتال من</h3>
+<span id="activeName" class="small"></span>
+<span style="flex:1"></span>
+<button id="newPage" class="primary">＋ صفحه جدید</button>
+</header>
+
+<div class="layout">
+<main>
+
+<div class="top">
+<div class="caption">⭐ موضوعات پین‌شده</div>
+<div class="tabs" id="pinnedTabs"></div>
+<div class="caption">صفحه‌های موضوع انتخاب‌شده</div>
+<div class="tabs" id="pageTabs"></div>
+</div>
+
+<div class="paper-area" id="paperArea">
+<div class="paper">
+<canvas id="canvas"></canvas>
+</div>
+</div>
+
+<div class="toolbar">
+<select id="tool" title="نوع قلم">
+<option value="ballpoint">خودکار</option>
+<option value="fine">روان‌نویس</option>
+<option value="fountain">خودنویس</option>
+<option value="pencil">مداد</option>
+<option value="brush">قلم‌مویی</option>
+<option value="marker">ماژیک</option>
+<option value="highlighter">هایلایتر</option>
+<option value="calligraphy">خوشنویسی</option>
+<option value="eraser">پاک‌کن</option>
+</select>
+<input type="color" id="color" value="#20242c" title="رنگ قلم">
+<span class="small">ضخامت</span>
+<input type="range" id="thickness" min="1" max="35" value="3">
+<span id="thicknessValue" class="small">3</span>
+<span class="sep"></span>
+<button id="undo">↶ بازگشت</button>
+<button id="clear">پاک کردن صفحه</button>
+<span class="status" id="status">ذخیره خودکار فعال است</span>
+</div>
+
+<div class="settings">
+<strong style="font-size:12px">⚙️ تنظیمات کاغذ</strong>
+
+<div class="setting">
+رنگ:
+<input type="color" id="paperColor" value="#ffffff">
+</div>
+
+<div class="setting">
+سبک:
+<select id="paperStyle">
+<option value="plain">ساده</option>
+<option value="lined">خط‌دار</option>
+<option value="grid">شطرنجی</option>
+<option value="dotted">نقطه‌ای</option>
+</select>
+</div>
+
+<div class="setting">
+قاب:
+<select id="paperFrame">
+<option value="yes">با قاب</option>
+<option value="no">بدون قاب</option>
+</select>
+</div>
+
+<div class="setting">
+رنگ خطوط:
+<input type="color" id="lineColor" value="#dce4ef">
+</div>
+
+<div class="setting">
+تصویر پس‌زمینه:
+<input type="file" id="backgroundFile" accept="image/*">
+</div>
+
+<button id="removeBackground">حذف عکس</button>
+<button id="resetPaper">بازنشانی ظاهر</button>
+</div>
+
+</main>
+
+<aside class="sidebar" id="sidebar">
+<h3>📁 مدیریت موضوعات</h3>
+<button class="add" id="openNameModal">✍️ ایجاد موضوع با قلم</button>
+<p class="small">برای پین کردن موضوع، ستاره آن را انتخاب کن.</p>
+<div id="topics"></div>
+</aside>
+</div>
+</div>
+
+<div class="modal" id="nameModal">
+<div class="modal-box">
+<h3>✍️ ایجاد موضوع جدید</h3>
+<p class="small">نام موضوع را با قلم نوری بنویس.</p>
+<canvas id="nameCanvas" width="1000" height="260"></canvas>
+<div class="modal-actions">
+<button id="clearName">پاک کردن نوشته</button>
+<select id="nameMode">
+<option value="text">تبدیل دست‌خط به متن فارسی</option>
+<option value="image">حفظ دست‌خط اصلی</option>
+</select>
+</div>
+<input id="recognizedName" placeholder="نام موضوع یا متن تشخیص داده شده" style="width:100%">
+<div class="modal-actions">
+<button class="primary" id="recognize">تشخیص دست‌خط</button>
+<button class="primary" id="createTopic">ثبت موضوع</button>
+<button id="closeModal">انصراف</button>
+</div>
+<p id="ocrStatus" class="small"></p>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY='digital_notebook_v5';
+
+let data;
+try{data=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){data=null}
+
+if(!data){
+ data={
+  topics:[{
+   id:1,name:'یادداشت‌های من',nameImage:null,pinned:true,
+   pages:[{
+    id:11,name:'صفحه ۱',width:21,height:29.7,strokes:[],
+    settings:{color:'#ffffff',style:'plain',frame:'yes',lineColor:'#dce4ef',background:null}
+   }]
+  }],
+  activeTopic:1,activePage:11
+ };
+}
+
+function topic(){return data.topics.find(t=>t.id===data.activeTopic)}
+function page(){return topic()?.pages.find(p=>p.id===data.activePage)}
+
+function ensureSettings(p){
+ if(!p.settings)p.settings={
+  color:'#ffffff',style:'plain',frame:'yes',lineColor:'#dce4ef',background:null
+ };
+ if(!Array.isArray(p.strokes))p.strokes=[];
+}
+
+data.topics.forEach(t=>t.pages.forEach(ensureSettings));
+
+const canvas=$('canvas');
+const ctx=canvas.getContext('2d');
+let drawing=false,activeStroke=null;
+let bgImage=null,renderToken=0;
+
+function save(){
+ try{
+  localStorage.setItem(KEY,JSON.stringify(data));
+  $('status').textContent='✓ ذخیره شد';
+ }catch(e){
+  $('status').textContent='حافظه مرورگر پر شده است؛ عکس کوچک‌تری انتخاب کن.';
+ }
+}
+
+function render(){
+ $('topics').innerHTML='';
+ $('pinnedTabs').innerHTML='';
+ $('pageTabs').innerHTML='';
+
+ data.topics.forEach(t=>{
+  const row=document.createElement('div');
+  row.className='topic'+(t.id===data.activeTopic?' active':'');
+
+  const name=document.createElement('button');
+  name.className='topic-name';
+
+  if(t.nameImage){
+   const img=document.createElement('img');
+   img.src=t.nameImage;
+   name.appendChild(img);
+  }else name.textContent=t.name;
+
+  name.onclick=()=>selectTopic(t.id);
+
+  const pin=document.createElement('button');
+  pin.className='pin'+(t.pinned?' pinned':'');
+  pin.textContent=t.pinned?'★':'☆';
+  pin.onclick=()=>{t.pinned=!t.pinned;save();render()};
+
+  const del=document.createElement('button');
+  del.className='pin';
+  del.textContent='×';
+  del.onclick=()=>deleteTopic(t.id);
+
+  row.append(name,pin,del);
+  $('topics').appendChild(row);
+
+  if(t.pinned){
+   const tab=document.createElement('button');
+   tab.className='tab'+(t.id===data.activeTopic?' active':'');
+   if(t.nameImage){
+    const img=document.createElement('img');
+    img.src=t.nameImage;
+    tab.appendChild(img);
+   }else tab.textContent='★ '+t.name;
+   tab.onclick=()=>selectTopic(t.id);
+   $('pinnedTabs').appendChild(tab);
+  }
+ });
+
+ if(!$('pinnedTabs').children.length)
+  $('pinnedTabs').textContent='موضوعی پین نشده است.';
+
+ const t=topic();
+ if(!t)return;
+
+ $('activeName').textContent='موضوع: '+t.name;
+
+ t.pages.forEach(p=>{
+  const tab=document.createElement('button');
+  tab.className='tab'+(p.id===data.activePage?' active':'');
+  tab.textContent=p.name;
+  tab.onclick=()=>selectPage(p.id);
+  $('pageTabs').appendChild(tab);
+ });
+
+ syncSettings();
+ renderPaper();
+}
+
+function selectTopic(id){
+ data.activeTopic=id;
+ data.activePage=topic().pages[0].id;
+ render();save();
+}
+
+function selectPage(id){
+ data.activePage=id;
+ render();save();
+}
+
+function addTopic(name,image){
+ const id=Date.now();
+ data.topics.push({
+  id,name,nameImage:image,pinned:false,
+  pages:[{
+   id:id+1,name:'صفحه ۱',width:21,height:29.7,
+   strokes:[],settings:{
+    color:'#ffffff',style:'plain',frame:'yes',
+    lineColor:'#dce4ef',background:null
+   }
+  }]
+ });
+ data.activeTopic=id;
+ data.activePage=id+1;
+ render();save();
+}
+
+function deleteTopic(id){
+ if(data.topics.length===1){
+  alert('حداقل یک موضوع باید باقی بماند.');
+  return;
+ }
+ if(!confirm('موضوع و تمام صفحات آن حذف شوند؟'))return;
+ data.topics=data.topics.filter(t=>t.id!==id);
+ if(data.activeTopic===id){
+  data.activeTopic=data.topics[0].id;
+  data.activePage=topic().pages[0].id;
+ }
+ render();save();
+}
+
+function newPage(){
+ const t=topic(),id=Date.now();
+ t.pages.push({
+  id,name:'صفحه '+(t.pages.length+1),
+  width:21,height:29.7,strokes:[],
+  settings:{
+   color:'#ffffff',style:'plain',frame:'yes',
+   lineColor:'#dce4ef',background:null
+  }
+ });
+ data.activePage=id;
+ render();save();
+}
+
+function syncSettings(){
+ const s=page().settings;
+ $('paperColor').value=s.color;
+ $('paperStyle').value=s.style;
+ $('paperFrame').value=s.frame;
+ $('lineColor').value=s.lineColor;
+}
+
+function drawBackground(w,h){
+ const s=page().settings;
+
+ ctx.fillStyle=s.color;
+ ctx.fillRect(0,0,w,h);
+
+ if(bgImage){
+  const iw=bgImage.width,ih=bgImage.height;
+  const scale=Math.max(w/iw,h/ih);
+  const dw=iw*scale,dh=ih*scale;
+  ctx.drawImage(bgImage,(w-dw)/2,(h-dh)/2,dw,dh);
+ }
+
+ ctx.save();
+ ctx.strokeStyle=s.lineColor;
+ ctx.fillStyle=s.lineColor;
+ ctx.lineWidth=1;
+
+ if(s.style==='lined'){
+  for(let y=38;y<h;y+=32){
+   ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+  }
+ }
+
+ if(s.style==='grid'){
+  for(let x=30;x<w;x+=30){
+   ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
+  }
+  for(let y=30;y<h;y+=30){
+   ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+  }
+ }
+
+ if(s.style==='dotted'){
+  for(let x=15;x<w;x+=24){
+   for(let y=15;y<h;y+=24){
+    ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill();
+   }
+  }
+ }
+
+ if(s.frame==='yes'){
+  ctx.strokeStyle=s.lineColor;
+  ctx.lineWidth=2;
+  ctx.strokeRect(9,9,w-18,h-18);
+ }
+ ctx.restore();
+}
+
+function drawStroke(s,w,h){
+ if(!s.points.length)return;
+ ctx.save();
+ ctx.globalCompositeOperation=s.tool==='eraser'?'destination-out':'source-over';
+
+ let mult=1,alpha=1;
+ switch(s.tool){
+  case 'fine':mult=.55;break;
+  case 'fountain':mult=1.15;break;
+  case 'pencil':mult=.8;alpha=.55;break;
+  case 'brush':mult=1.8;break;
+  case 'marker':mult=1.7;alpha=.75;break;
+  case 'highlighter':mult=3;alpha=.25;break;
+  case 'calligraphy':mult=1.5;break;
+  case 'eraser':mult=3;break;
+ }
+ ctx.globalAlpha=alpha;
+ ctx.strokeStyle=s.color;
+ ctx.fillStyle=s.color;
+ ctx.lineWidth=s.size*mult;
+ ctx.lineCap='round';
+ ctx.lineJoin='round';
+
+ const pts=s.points;
+ if(pts.length===1){
+  ctx.beginPath();
+  ctx.arc(pts[0].x*w,pts[0].y*h,ctx.lineWidth/2,0,Math.PI*2);
+  ctx.fill();
+ }else{
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x*w,pts[0].y*h);
+  for(let i=1;i<pts.length;i++)
+   ctx.lineTo(pts[i].x*w,pts[i].y*h);
+  ctx.stroke();
+ }
+ ctx.restore();
+}
+
+function renderPaper(){
+ const p=page();
+ if(!p)return;
+ ensureSettings(p);
+
+ const w=p.width/2.54*96,h=p.height/2.54*96;
+ const ratio=Math.max(2,window.devicePixelRatio||1);
+ canvas.style.width=w+'px';
+ canvas.style.height=h+'px';
+ canvas.width=Math.round(w*ratio);
+ canvas.height=Math.round(h*ratio);
+
+ const token=++renderToken;
+ ctx.setTransform(ratio,0,0,ratio,0,0);
+
+ const paint=()=>{
+  if(token!==renderToken)return;
+  drawBackground(w,h);
+  p.strokes.forEach(s=>drawStroke(s,w,h));
+ };
+
+ bgImage=null;
+ if(p.settings.background){
+  const img=new Image();
+  img.onload=()=>{
+   if(token!==renderToken)return;
+   bgImage=img;
+   paint();
+  };
+  img.onerror=paint;
+  img.src=p.settings.background;
+ }else paint();
+}
+
+function updatePaperSetting(key,value){
+ page().settings[key]=value;
+ save();
+ renderPaper();
+}
+
+$('paperColor').oninput=e=>updatePaperSetting('color',e.target.value);
+$('paperStyle').onchange=e=>updatePaperSetting('style',e.target.value);
+$('paperFrame').onchange=e=>updatePaperSetting('frame',e.target.value);
+$('lineColor').oninput=e=>updatePaperSetting('lineColor',e.target.value);
+
+$('backgroundFile').onchange=e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ if(!file.type.startsWith('image/')){
+  alert('لطفاً یک فایل تصویری انتخاب کن.');
+  return;
+ }
+ if(file.size>3*1024*1024){
+  alert('حجم عکس باید کمتر از ۳ مگابایت باشد.');
+  e.target.value='';
+  return;
+ }
+ const reader=new FileReader();
+ reader.onload=()=>{
+  page().settings.background=reader.result;
+  save();renderPaper();
+ };
+ reader.readAsDataURL(file);
+};
+
+$('removeBackground').onclick=()=>{
+ page().settings.background=null;
+ $('backgroundFile').value='';
+ save();renderPaper();
+};
+
+$('resetPaper').onclick=()=>{
+ page().settings={
+  color:'#ffffff',style:'plain',frame:'yes',
+  lineColor:'#dce4ef',background:null
+ };
+ $('backgroundFile').value='';
+ syncSettings();save();renderPaper();
+};
+
+function point(e){
+ const r=canvas.getBoundingClientRect();
+ return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};
+}
+
+function redraw(){renderPaper()}
+
+canvas.addEventListener('pointerdown',e=>{
+ e.preventDefault();
+ drawing=true;
+ canvas.setPointerCapture(e.pointerId);
+ activeStroke={
+  tool:$('tool').value,
+  color:$('color').value,
+  size:Number($('thickness').value),
+  points:[point(e)]
+ };
+ page().strokes.push(activeStroke);
+ redraw();
+});
+
+canvas.addEventListener('pointermove',e=>{
+ if(!drawing)return;
+ e.preventDefault();
+ activeStroke.points.push(point(e));
+ redraw();
+});
+
+function endDrawing(){
+ if(!drawing)return;
+ drawing=false;
+ activeStroke=null;
+ save();
+}
+canvas.addEventListener('pointerup',endDrawing);
+canvas.addEventListener('pointercancel',endDrawing);
+
+$('thickness').oninput=e=>$('thicknessValue').textContent=e.target.value;
+$('undo').onclick=()=>{
+ page().strokes.pop();redraw();save();
+};
+$('clear').onclick=()=>{
+ if(!confirm('تمام نوشته‌های این صفحه پاک شوند؟'))return;
+ page().strokes=[];redraw();save();
+};
+$('newPage').onclick=newPage;
+$('toggle').onclick=()=>$('sidebar').classList.toggle('closed');
+
+$('applySize')?.addEventListener('click',()=>{});
+/* اندازه صفحه در این نسخه با کنترل‌های زیر تنظیم می‌شود. */
+
+function addSizeControls(){
+ const area=document.querySelector('.settings');
+ const box=document.createElement('div');
+ box.className='setting';
+ box.innerHTML=`
+ <span>عرض (cm)</span><input id="pw" type="number" min="5" max="100" value="21" style="width:55px">
+ <span>ارتفاع (cm)</span><input id="ph" type="number" min="5" max="150" value="29.7" style="width:55px">
+ <button id="applyPaperSize">اعمال اندازه</button>`;
+ area.appendChild(box);
+ box.querySelector('#applyPaperSize').onclick=()=>{
+  const w=Number($('pw').value),h=Number($('ph').value);
+  if(w<5||w>100||h<5||h>150||!w||!h){
+   alert('عرض باید ۵ تا ۱۰۰ و ارتفاع ۵ تا ۱۵۰ سانتی‌متر باشد.');
+   return;
+  }
+  page().width=w;page().height=h;
+  save();renderPaper();
+ };
+ box.querySelector('#pw').value=page().width;
+ box.querySelector('#ph').value=page().height;
+}
+addSizeControls();
+
+// نام‌گذاری با دست‌خط
+const nameCtx=$('nameCanvas').getContext('2d');
+let nameDrawing=false,nameHasInk=false;
+
+function clearName(){
+ nameCtx.clearRect(0,0,1000,260);
+ nameCtx.fillStyle='#fff';
+ nameCtx.fillRect(0,0,1000,260);
+ nameCtx.strokeStyle='#172b4d';
+ nameCtx.lineWidth=6;
+ nameCtx.lineCap='round';
+ nameCtx.lineJoin='round';
+ nameHasInk=false;
+}
+function openName(){
+ clearName();
+ $('recognizedName').value='';
+ $('ocrStatus').textContent='';
+ $('nameModal').style.display='flex';
+}
+function closeName(){
+ $('nameModal').style.display='none';
+}
+function namePoint(e){
+ const r=$('nameCanvas').getBoundingClientRect();
+ return{x:(e.clientX-r.left)*1000/r.width,y:(e.clientY-r.top)*260/r.height};
+}
+$('nameCanvas').addEventListener('pointerdown',e=>{
+ e.preventDefault();
+ nameDrawing=true;
+ $('nameCanvas').setPointerCapture(e.pointerId);
+ const p=namePoint(e);
+ nameCtx.beginPath();nameCtx.moveTo(p.x,p.y);
+ nameHasInk=true;
+});
+$('nameCanvas').addEventListener('pointermove',e=>{
+ if(!nameDrawing)return;
+ const p=namePoint(e);
+ nameCtx.lineTo(p.x,p.y);nameCtx.stroke();
+});
+$('nameCanvas').addEventListener('pointerup',()=>nameDrawing=false);
+$('nameCanvas').addEventListener('pointercancel',()=>nameDrawing=false);
+
+$('openNameModal').onclick=openName;
+$('closeModal').onclick=closeName;
+$('clearName').onclick=clearName;
+
+$('recognize').onclick=async()=>{
+ if(!nameHasInk){alert('ابتدا نام را بنویس.');return}
+ if(!window.Tesseract){
+  $('ocrStatus').textContent='کتابخانه تشخیص بارگذاری نشده است.';
+  return;
+ }
+ $('ocrStatus').textContent='در حال تشخیص دست‌خط فارسی...';
+ try{
+  const result=await Tesseract.recognize(
+   $('nameCanvas'),'fas',
+   {logger:m=>{
+    if(m.status==='recognizing text')
+     $('ocrStatus').textContent='تشخیص: '+Math.round(m.progress*100)+'٪';
+   }}
+  );
+  $('recognizedName').value=result.data.text.trim();
+  $('ocrStatus').textContent='متن را بررسی و در صورت نیاز اصلاح کن.';
+ }catch(e){
+  $('ocrStatus').textContent='خطا در تشخیص؛ اتصال اینترنت را بررسی کن.';
+ }
+};
+
+$('createTopic').onclick=()=>{
+ const mode=$('nameMode').value;
+ const text=$('recognizedName').value.trim();
+ if(mode==='text'&&!text){alert('نام تشخیص داده شده را وارد کن.');return}
+ if(mode==='image'&&!nameHasInk){alert('ابتدا نام را بنویس.');return}
+ if(mode==='image'&&nameHasInk){
+  addTopic('موضوع دست‌نویس',$('nameCanvas').toDataURL('image/png'));
+ }else addTopic(text,null);
+ closeName();
+};
+
+$('nameMode').onchange=()=>{
+ $('ocrStatus').textContent=
+ $('nameMode').value==='image'
+ ?'دست‌خط به همان شکل ذخیره خواهد شد.'
+ :'برای تبدیل به متن، دکمه تشخیص دست‌خط را بزن.';
+};
+
+clearName();
+render();
+</script>
+</body>
+</html>
