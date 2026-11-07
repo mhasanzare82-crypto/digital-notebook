@@ -1,0 +1,37 @@
+
+name: Build Windows applications
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows EXE files
+        run: npm run dist
+
+      - name: Upload Windows applications
+        uses: actions/upload-artifact@v4
+        with:
+          name: DigitalNotebook-Windows11
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
